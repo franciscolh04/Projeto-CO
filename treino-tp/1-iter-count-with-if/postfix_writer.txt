@@ -1,0 +1,43 @@
+void udf::postfix_writer::do_iterate_node(udf::iterate_node *const node, int lvl) {
+  ASSERT_SAFE_EXPRESSIONS;
+
+  int iterateStart = _lbl++;
+  int iterateEnd = _lbl++;
+
+  // verificar condição
+  node->condition()->accept(this, lvl); // pilha: condicao
+  _pf.JZ(mklbl(iterateEnd)); // salta se condição falhar
+
+  // inicializar i
+  _pf.INT(0);         // pilha: i
+  _pf.DUP32();        // pilha: i, i
+
+  _pf.ALIGN();
+  _pf.LABEL(mklbl(iterateStart)); // loop start
+
+  // verificar se i < count
+  node->count()->accept(this, lvl); // pilha: i, i, count
+  _pf.LT();                         // pilha: i, (i < count)
+  _pf.JZ(mklbl(iterateEnd));       // fim se i >= count
+
+  _pf.DUP32();        // pilha: i, i
+
+  _pf.INT(cdk::reference_type::cast(node->vector()->type())->referenced()->size());      // pilha: i, i, size
+  _pf.MUL();          // pilha: i, offset
+
+  node->vector()->accept(this, lvl); // pilha: i, offset, base
+  _pf.ADD();           // pilha: i, address
+  _pf.LDINT();         // pilha: i, value
+
+  _pf.CALL(node->identifier()); // pilha: i, new_value
+  _pf.TRASH(4);                 // remove new_value
+
+  _pf.INT(1);       // pilha: i, 1
+  _pf.ADD();        // pilha: i+1
+  _pf.DUP32();      // pilha: i+1, i+1
+
+  _pf.JMP(mklbl(iterateStart));
+
+  _pf.ALIGN();
+  _pf.LABEL(mklbl(iterateEnd)); // fim do loop
+}
